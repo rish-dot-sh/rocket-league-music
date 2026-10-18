@@ -23,7 +23,7 @@ export const MobileNav = () => {
           variant="ghost"
           size="icon"
           className="sm:hidden"
-          aria-label="Open menu"
+          aria-label="Menu"
         >
           <Menu className="size-5" />
         </Button>

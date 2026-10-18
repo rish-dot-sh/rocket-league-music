@@ -416,6 +416,31 @@ describe('SongRecommendations', () => {
         ).toBeInTheDocument();
       });
     });
+
+    // The share dialog sits outside this component and names the top song.
+    it('hands the songs it loaded to the page', async () => {
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => deterministicResult,
+      });
+      const onSongsLoaded = jest.fn();
+
+      render(
+        <SongRecommendations
+          replayData={replayData}
+          onSongsLoaded={onSongsLoaded}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /TestPlayer/i }));
+
+      await waitFor(() => {
+        expect(onSongsLoaded).toHaveBeenCalledWith(
+          deterministicResult.recommendations,
+          'player-123'
+        );
+      });
+    });
   });
 
   describe('agentic mode', () => {

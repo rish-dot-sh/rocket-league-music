@@ -15,6 +15,7 @@ import {
   Player,
   isAgenticProfile,
   isDeterministicProfile,
+  Song,
 } from '../types/spotify';
 
 interface SongRecommendationsProps {
@@ -22,12 +23,15 @@ interface SongRecommendationsProps {
   className?: string;
   onMusicRecommendationsViewed?: () => void;
   onSpotifyIntegrationUsed?: () => void;
+  /** Receives the songs and whose they are, so the page can share the top one. */
+  onSongsLoaded?: (songs: Song[], playerId: string) => void;
 }
 
 export default function SongRecommendations({
   replayData,
   className,
   onMusicRecommendationsViewed,
+  onSongsLoaded,
   onSpotifyIntegrationUsed,
 }: SongRecommendationsProps) {
   const [recommendations, setRecommendations] =
@@ -113,6 +117,7 @@ export default function SongRecommendations({
 
       if (result.success) {
         setRecommendations(result);
+        onSongsLoaded?.(result.recommendations, playerId);
         setSelectedPlayer({ id: playerId, name: playerName });
         toast({
           title: `${result.recommendations.length} tracks for ${playerName}`,

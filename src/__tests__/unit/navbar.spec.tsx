@@ -168,7 +168,7 @@ describe('Navbar Component', () => {
     render(await Navbar());
 
     // The menu button is what a phone gets in place of the link row.
-    const trigger = await screen.findByRole('button', { name: 'Open menu' });
+    const trigger = await screen.findByRole('button', { name: 'Menu' });
     expect(trigger).toBeInTheDocument();
 
     // The wide-screen row is still rendered, just hidden by CSS below sm.

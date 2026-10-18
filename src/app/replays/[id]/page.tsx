@@ -5,7 +5,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { matchSummary } from '@/utils/matchSummary';
 import { ShareDialog } from '@/components/ShareDialog';
 import { useToast } from '@/components/ui/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,6 +21,7 @@ import SongRecommendations from '@/components/SongRecommendations';
 import { useContextualFeedbackContext } from '@/contexts/ContextualFeedbackContext';
 import { ContextualPrompt } from '@/components/feedback/ContextualPrompt';
 import { ReplayData } from '@/types/replay';
+import { Song } from '@/types/spotify';
 
 export default function ReplayDetailsPage() {
   const { id } = useParams() as { id: string };
@@ -36,6 +36,9 @@ export default function ReplayDetailsPage() {
   const [isShowcase, setIsShowcase] = useState<boolean>(false);
   const [user, setUser] = useState<any>(null);
   const [isUserOwner, setIsUserOwner] = useState<boolean>(false);
+  const [topSong, setTopSong] = useState<(Song & { playerId: string }) | null>(
+    null
+  );
 
   // Contextual feedback hook
   const {
@@ -404,7 +407,9 @@ export default function ReplayDetailsPage() {
           {replay.visibility === 'public' && (
             <ShareDialog
               url={typeof window === 'undefined' ? '' : window.location.href}
-              summary={matchSummary(replay.metrics, replay.fileName).primary}
+              metrics={replay.metrics}
+              topSong={topSong}
+              isOwner={isUserOwner}
             />
           )}
           {!isShowcase && isUserOwner && (
@@ -473,6 +478,9 @@ export default function ReplayDetailsPage() {
             replayData={replay}
             onMusicRecommendationsViewed={triggerMusicRecommendationsViewed}
             onSpotifyIntegrationUsed={triggerSpotifyIntegrationUsed}
+            onSongsLoaded={(songs, playerId) =>
+              setTopSong(songs[0] ? { ...songs[0], playerId } : null)
+            }
           />
         </TabsContent>
       </Tabs>

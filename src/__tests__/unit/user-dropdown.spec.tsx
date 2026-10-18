@@ -32,10 +32,11 @@ jest.mock('@/app/login/action', () => ({
 
 // Mock paraglide messages
 jest.mock('@/paraglide/messages', () => ({
-  my_account: () => 'My Account',
+  my_account: () => 'Account',
   log_out: () => 'Log Out',
-  upgrade_to_pro_cta: () => 'Upgrade to Pro',
-  you_are_a_pro: () => 'You are a Pro!',
+  pro_plan_coming_soon: () => 'Pro plan coming soon',
+  pro_plan_coming_soon_note: () => 'Nothing is behind a paywall yet.',
+  you_are_a_pro: () => 'Pro plan active',
 }));
 
 // Mock Icons
@@ -134,11 +135,11 @@ describe('UserDropdown Component', () => {
     // Find dropdown content
     const content = screen.getByTestId('dropdown-content');
     expect(content).toBeInTheDocument();
-    expect(content).toHaveTextContent('My Account');
+    expect(content).toHaveTextContent('Account');
 
-    // Find the larger initial in the dropdown - use class selector to be more specific
-    const largeInitial = screen.getByText('T', { selector: '.text-3xl' });
-    expect(largeInitial).toBeInTheDocument();
+    // Find the initial in the dropdown identity row - use class selector to be more specific
+    const identityInitial = screen.getByText('T', { selector: '.size-9' });
+    expect(identityInitial).toBeInTheDocument();
   });
 
   it('renders user image when provided', () => {
@@ -154,29 +155,48 @@ describe('UserDropdown Component', () => {
     expect(images[0]).toHaveAttribute('alt', defaultProps.userName);
 
     // Check dropdown content
-    expect(screen.getByText('My Account')).toBeInTheDocument();
+    expect(screen.getByText('Account')).toBeInTheDocument();
 
     // Check the second image (in dropdown)
     expect(images[1]).toHaveAttribute('src', imageUrl);
     expect(images[1]).toHaveAttribute('alt', defaultProps.userName);
   });
 
-  it('shows "Upgrade to Pro" button for non-pro users', () => {
+  it('shows the Pro plan as unavailable, disabled, for non-pro users', () => {
     render(<UserDropdown {...defaultProps} isProUser={false} />);
 
-    const upgradeButton = screen.getByRole('button', {
-      name: 'Upgrade to Pro',
+    const proButton = screen.getByRole('button', {
+      name: 'Pro plan coming soon',
     });
-    expect(upgradeButton).toBeInTheDocument();
-    expect(upgradeButton).not.toBeDisabled();
-  });
-
-  it('shows "You are a Pro!" button (disabled) for pro users', () => {
-    render(<UserDropdown {...defaultProps} isProUser={true} />);
-
-    const proButton = screen.getByRole('button', { name: 'You are a Pro!' });
     expect(proButton).toBeInTheDocument();
     expect(proButton).toBeDisabled();
+    expect(
+      screen.getByText('Nothing is behind a paywall yet.')
+    ).toBeInTheDocument();
+  });
+
+  it('does not start a checkout when the disabled Pro button is clicked', () => {
+    const mockFetch = jest.fn();
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    render(<UserDropdown {...defaultProps} isProUser={false} />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pro plan coming soon' })
+    );
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('shows the active Pro state (disabled) for pro users', () => {
+    render(<UserDropdown {...defaultProps} isProUser={true} />);
+
+    const proButton = screen.getByRole('button', { name: 'Pro plan active' });
+    expect(proButton).toBeInTheDocument();
+    expect(proButton).toBeDisabled();
+    expect(
+      screen.queryByText('Nothing is behind a paywall yet.')
+    ).not.toBeInTheDocument();
   });
 
   it('calls signOut action and refreshes router on log out click', async () => {

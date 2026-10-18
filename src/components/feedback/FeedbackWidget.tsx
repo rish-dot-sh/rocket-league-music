@@ -1,5 +1,5 @@
 // ABOUTME: Floating feedback widget with feedback type selection and form submission
-// ABOUTME: Auto-shows after 30 seconds, supports dark/light mode, accessible with keyboard navigation
+// ABOUTME: Auto-shows once per month unless dismissed, accessible with keyboard navigation
 
 'use client';
 
@@ -7,15 +7,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { track } from '@vercel/analytics';
 import { useContextualFeedbackContext } from '@/contexts/ContextualFeedbackContext';
-import {
-  MessageSquare,
-  X,
-  Bug,
-  Lightbulb,
-  Heart,
-  Wrench,
-  MessageCircle,
-} from 'lucide-react';
+import { MessageSquare, X, Heart, Wrench, MessageCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,54 +26,70 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import {
+  FEEDBACK_MAX_LENGTH,
+  FEEDBACK_MIN_LENGTH,
+} from '@/utils/feedbackLimits';
 
-type FeedbackType =
-  | 'bug'
-  | 'feature'
-  | 'improvement'
-  | 'appreciation'
-  | 'general';
+type FeedbackType = 'improvement' | 'appreciation' | 'general';
 
 interface FeedbackWidgetProps {
   autoShowDelay?: number; // milliseconds
   className?: string;
 }
 
+// How long a dismissal keeps the widget from auto-showing again
+const DISMISS_MEMORY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const DISMISSED_AT_KEY = 'feedback-dismissed-at';
+
+// A browser set to block site data, and a sandboxed iframe, throw on any
+// localStorage access at all. Every read and write goes through these two
+// guards so a storage failure can never escape into React's commit phase and
+// take the page down with it.
+function readDismissedAt(): number {
+  try {
+    return Number(localStorage.getItem(DISMISSED_AT_KEY));
+  } catch {
+    // Storage is unreadable, so treat this visitor as never having dismissed.
+    return 0;
+  }
+}
+
+function writeDismissedAt(timestamp: number) {
+  try {
+    localStorage.setItem(DISMISSED_AT_KEY, String(timestamp));
+  } catch {
+    // Storage is unwritable or full; the dismissal still holds for this session.
+  }
+}
+
+// Three options, because nobody writing in wants to first decide whether their
+// annoyance is a bug or an improvement — the message itself says which it is.
+// The values are the ones the feedback API already accepts, so 'improvement'
+// carries everything actionable.
 const feedbackTypes = [
   {
-    value: 'bug' as const,
-    label: 'Bug Report',
-    icon: Bug,
-    description: "Something isn't working",
-  },
-  {
-    value: 'feature' as const,
-    label: 'Feature Request',
-    icon: Lightbulb,
-    description: 'Suggest a new feature',
-  },
-  {
     value: 'improvement' as const,
-    label: 'Improvement',
+    label: 'Something to fix or add',
     icon: Wrench,
-    description: 'How we can do better',
+    placeholder: "What broke, or what's missing?",
   },
   {
     value: 'appreciation' as const,
-    label: 'Appreciation',
+    label: 'Something you liked',
     icon: Heart,
-    description: 'Share some love',
+    placeholder: 'Which part?',
   },
   {
     value: 'general' as const,
-    label: 'General Feedback',
+    label: 'Something else',
     icon: MessageCircle,
-    description: 'Other thoughts',
+    placeholder: 'Anything at all.',
   },
 ];
 
 export function FeedbackWidget({
-  autoShowDelay = 30000,
+  autoShowDelay = 180000,
   className,
 }: FeedbackWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -105,6 +113,9 @@ export function FeedbackWidget({
   // Auto-show logic
   useEffect(() => {
     if (isDismissed || hasAutoShown) return;
+
+    const dismissedAt = readDismissedAt();
+    if (dismissedAt && Date.now() - dismissedAt < DISMISS_MEMORY_MS) return;
 
     const timer = setTimeout(() => {
       // Check if contextual feedback should suppress global auto-show
@@ -141,12 +152,10 @@ export function FeedbackWidget({
         switch (context) {
           case 'replay-upload-success':
           case 'replay-stats-engagement':
-            return 'improvement';
           case 'music-recommendations-viewed':
           case 'spotify-integration-used':
-            return 'feature';
           case 'error-recovery':
-            return 'bug';
+            return 'improvement';
           case 'page-engagement':
           default:
             return 'general';
@@ -181,17 +190,16 @@ export function FeedbackWidget({
 
     if (!message.trim()) {
       toast({
-        title: 'Message required',
-        description: 'Please enter your feedback message.',
+        title: 'Write something first',
         variant: 'destructive',
       });
       return;
     }
 
-    if (message.trim().length < 10) {
+    if (message.trim().length < FEEDBACK_MIN_LENGTH) {
       toast({
-        title: 'Message too short',
-        description: 'Please enter at least 10 characters for your feedback.',
+        title: 'A bit more detail',
+        description: `At least ${FEEDBACK_MIN_LENGTH} characters.`,
         variant: 'destructive',
       });
       return;
@@ -219,8 +227,8 @@ export function FeedbackWidget({
       if (!response.ok) {
         if (response.status === 401) {
           toast({
-            title: 'Sign in required',
-            description: 'Please sign in to submit feedback.',
+            title: 'Sign in to send feedback',
+            description: 'Taking you to the sign-in page.',
             variant: 'destructive',
           });
           router.push('/login');
@@ -237,7 +245,7 @@ export function FeedbackWidget({
             .map((err: any) => err.message)
             .join(', ');
           toast({
-            title: 'Validation Error',
+            title: 'Check that again',
             description: validationErrors,
             variant: 'destructive',
           });
@@ -248,8 +256,7 @@ export function FeedbackWidget({
       }
 
       toast({
-        title: 'Feedback submitted!',
-        description: "Thank you for your feedback. We'll review it soon.",
+        title: 'Got it. I read these myself.',
       });
 
       // Track successful submission
@@ -268,8 +275,8 @@ export function FeedbackWidget({
     } catch (error) {
       console.error('Error submitting feedback:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to submit feedback. Please try again.',
+        title: "That didn't send",
+        description: 'Try again in a moment.',
         variant: 'destructive',
       });
     } finally {
@@ -284,14 +291,11 @@ export function FeedbackWidget({
       autoTriggered: showAutoPrompt,
     });
 
+    writeDismissedAt(Date.now());
     setIsDismissed(true);
     setShowAutoPrompt(false);
     setIsOpen(false);
   };
-
-  const selectedTypeData = feedbackTypes.find(
-    (type) => type.value === selectedType
-  );
 
   if (!isOpen && !showAutoPrompt) {
     return (
@@ -304,12 +308,11 @@ export function FeedbackWidget({
               page: window.location.pathname,
             });
           }}
-          size="lg"
-          className="rounded-full shadow-lg hover:scale-105 transition-transform"
-          aria-label="Open feedback widget"
+          size="icon"
+          className="size-11 rounded-full border border-border bg-secondary text-secondary-foreground transition-colors duration-instant hover:bg-accent"
+          aria-label="Send feedback"
         >
-          <MessageSquare className="h-5 w-5 mr-2" />
-          Feedback
+          <MessageSquare className="size-5" />
         </Button>
       </div>
     );
@@ -317,26 +320,27 @@ export function FeedbackWidget({
 
   return (
     <div className={`fixed bottom-6 right-6 z-50 ${className}`}>
-      <Card className="w-96 shadow-xl border-2">
+      <Card className="w-[22rem] border-border shadow-2xl shadow-black/40">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">Share Feedback</CardTitle>
+              <CardTitle className="text-lg">Tell me something</CardTitle>
             </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={handleDismiss}
               className="h-8 w-8"
-              aria-label="Close feedback widget"
+              aria-label="Close"
             >
               <X className="h-4 w-4" />
             </Button>
           </div>
           {showAutoPrompt && !isOpen && (
             <CardDescription className="text-primary">
-              How's your experience so far? Let us know!
+              This is a one-person project, so it is rough in places. Tell me
+              where.
             </CardDescription>
           )}
         </CardHeader>
@@ -344,7 +348,7 @@ export function FeedbackWidget({
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="feedback-type">What type of feedback?</Label>
+              <Label htmlFor="feedback-type">What&apos;s this about?</Label>
               <Select
                 value={selectedType}
                 onValueChange={(value: FeedbackType) => setSelectedType(value)}
@@ -357,15 +361,10 @@ export function FeedbackWidget({
                     const Icon = type.icon;
                     return (
                       <SelectItem key={type.value} value={type.value}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4" />
-                          <div>
-                            <div className="font-medium">{type.label}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {type.description}
-                            </div>
-                          </div>
-                        </div>
+                        <span className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 shrink-0" />
+                          {type.label}
+                        </span>
                       </SelectItem>
                     );
                   })}
@@ -377,28 +376,28 @@ export function FeedbackWidget({
               <Label htmlFor="feedback-message">Your message</Label>
               <Textarea
                 id="feedback-message"
-                placeholder={`Tell us about your ${selectedTypeData?.label.toLowerCase()}...`}
+                placeholder={
+                  feedbackTypes.find((type) => type.value === selectedType)
+                    ?.placeholder
+                }
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 className="min-h-[100px] resize-none"
-                maxLength={2000}
+                maxLength={FEEDBACK_MAX_LENGTH}
                 required
               />
-              <div
-                className={`text-xs text-right ${
-                  message.length < 10
-                    ? 'text-red-500 dark:text-red-400'
-                    : 'text-muted-foreground'
-                }`}
-              >
-                {message.length}/2000{' '}
-                {message.length < 10 ? '(minimum 10 characters)' : ''}
+              <div className="text-right text-xs text-muted-foreground">
+                {message.length === 0
+                  ? ''
+                  : message.length < FEEDBACK_MIN_LENGTH
+                    ? `${FEEDBACK_MIN_LENGTH} characters minimum`
+                    : `${message.length}/${FEEDBACK_MAX_LENGTH}`}
               </div>
             </div>
 
             <div className="flex gap-2">
               <Button type="submit" disabled={isSubmitting} className="flex-1">
-                {isSubmitting ? 'Submitting...' : 'Send Feedback'}
+                {isSubmitting ? 'Sending…' : 'Send'}
               </Button>
               {showAutoPrompt && (
                 <Button
@@ -406,7 +405,7 @@ export function FeedbackWidget({
                   variant="outline"
                   onClick={() => setShowAutoPrompt(false)}
                 >
-                  Maybe Later
+                  Not now
                 </Button>
               )}
             </div>

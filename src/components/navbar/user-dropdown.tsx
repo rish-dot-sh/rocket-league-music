@@ -17,6 +17,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import * as m from '@/paraglide/messages';
 
+// The Pro purchase path is closed: nothing in the app meters replays, so there
+// is no benefit to sell. Turning it on means shipping the metering first, and
+// giving the button an upgrade label to go with it.
+const PRO_CHECKOUT_ENABLED = false;
+
 interface UserDropdownProps {
   session: string;
   isProUser?: boolean;
@@ -80,7 +85,10 @@ export const UserDropdown = ({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger>
+      <DropdownMenuTrigger
+        className="rounded-full outline-none transition-opacity duration-instant hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        aria-label="Open account menu"
+      >
         {hasUserImage ? (
           <Image
             className="overflow-hidden rounded-full"
@@ -95,28 +103,42 @@ export const UserDropdown = ({
           </div>
         )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>{m.my_account()}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <div className="flex flex-col items-center justify-center p-2">
+        <div className="flex items-center gap-3 px-2 py-1.5">
           {hasUserImage ? (
             <Image
               className="overflow-hidden rounded-full"
               src={userImage!}
               alt={userName || session}
-              width={100}
-              height={100}
+              width={36}
+              height={36}
             />
           ) : (
-            <div className="bg-primary text-primary-foreground flex size-16 items-center justify-center rounded-full text-3xl">
+            <div className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-full">
               {session.charAt(0).toUpperCase()}
             </div>
           )}
-          <h2 className="py-2 text-lg font-bold">{userName || session}</h2>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-medium">
+              {userName || session}
+            </span>
+            {userName && (
+              <span className="text-muted-foreground truncate text-xs">
+                {session}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="px-2 pb-2">
           <Button
-            onClick={handleCreateCheckoutSession}
-            disabled={isProUser || isPending}
-            className="w-64"
+            onClick={
+              PRO_CHECKOUT_ENABLED ? handleCreateCheckoutSession : undefined
+            }
+            disabled={!PRO_CHECKOUT_ENABLED || isProUser || isPending}
+            variant="secondary"
+            className="w-full"
           >
             {isProUser ? (
               m.you_are_a_pro()
@@ -125,10 +147,15 @@ export const UserDropdown = ({
                 {isPending && (
                   <Icons.loader className="mr-2 size-4 animate-spin" />
                 )}
-                {m.upgrade_to_pro_cta()}
+                {m.pro_plan_coming_soon()}
               </>
             )}
           </Button>
+          {!isProUser && (
+            <p className="text-muted-foreground mt-1.5 text-center text-xs">
+              {m.pro_plan_coming_soon_note()}
+            </p>
+          )}
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut}>

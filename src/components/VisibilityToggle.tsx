@@ -1,3 +1,5 @@
+// ABOUTME: Switch that flips a replay between private and public showcase visibility.
+// ABOUTME: Writes directly to the replays table and toasts the result.
 'use client';
 
 import { useState } from 'react';
@@ -24,8 +26,9 @@ export default function VisibilityToggle({
   initialVisibility,
   onVisibilityChange,
 }: VisibilityToggleProps) {
-  const [isPublic, setIsPublic] = useState(initialVisibility === 'public');
+  const [visibility, setVisibility] = useState(initialVisibility);
   const [isUpdating, setIsUpdating] = useState(false);
+  const isPublic = visibility === 'public';
   const supabase = createClient();
   const { toast } = useToast();
 
@@ -41,7 +44,7 @@ export default function VisibilityToggle({
 
       if (error) throw error;
 
-      setIsPublic(!isPublic);
+      setVisibility(newVisibility);
       if (onVisibilityChange) {
         onVisibilityChange(newVisibility);
       }
@@ -54,13 +57,21 @@ export default function VisibilityToggle({
       console.error('Error updating visibility:', error);
       toast({
         variant: 'destructive',
-        title: 'Update failed',
-        description: 'Could not update replay visibility',
+        title: 'Could not change visibility',
+        description: 'Try again in a moment.',
       });
     } finally {
       setIsUpdating(false);
     }
   };
+
+  // An unlisted replay stays out of the showcase, but its ballchasing.com link
+  // works for anyone holding it, so it cannot claim to be for the owner alone.
+  const visibilityDescription = isPublic
+    ? 'Anyone with the link can see this replay in the showcase.'
+    : visibility === 'unlisted'
+      ? 'Unlisted: not in the showcase, but anyone with the ballchasing.com link can open it.'
+      : 'Only you can see this replay.';
 
   return (
     <div className="flex items-center space-x-2">
@@ -81,23 +92,19 @@ export default function VisibilityToggle({
               >
                 {isPublic ? (
                   <>
-                    <Globe className="h-4 w-4 text-green-500" />
+                    <Globe className="h-4 w-4 text-muted-foreground" />
                     <span>Public</span>
                   </>
                 ) : (
                   <>
-                    <Lock className="h-4 w-4 text-amber-500" />
+                    <Lock className="h-4 w-4 text-muted-foreground" />
                     <span>Private</span>
                   </>
                 )}
               </Label>
             </div>
           </TooltipTrigger>
-          <TooltipContent>
-            {isPublic
-              ? 'This replay is visible in the public showcase'
-              : 'Make this replay visible in the public showcase'}
-          </TooltipContent>
+          <TooltipContent>{visibilityDescription}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>

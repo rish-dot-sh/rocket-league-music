@@ -1,13 +1,11 @@
-import { LanguageSwitcher } from './language-switcher';
-
 // import { auth } from '@/app/api/auth/[...nextauth]/auth-options';
+import { MobileNav } from '@/components/navbar/mobile-nav';
+import { NAV_LINKS } from '@/components/navbar/nav-links';
 import { SignInButton } from '@/components/navbar/sign-in-button';
 import { UserDropdown } from '@/components/navbar/user-dropdown';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { Link } from '@/lib/i18n';
-import * as m from '@/paraglide/messages';
 import { createClient } from '@/utils/supabase/server';
-import Image from 'next/image';
 
 export const Navbar = async () => {
   const supabase = await createClient();
@@ -41,18 +39,27 @@ export const Navbar = async () => {
   // const userName = user_name ? `@${user_name}` : 'User Name Not Set';
 
   return (
-    <header className="w-full border-b">
+    <header className="sticky top-0 z-40 w-full border-b border-border bg-background">
       <div className="container flex h-16 items-center justify-between">
-        <Link href="/" className="font-mono text-lg font-bold">
-          {/* <Image
-            src="/images/logo.png"
-            alt="ReplayRhythms - Rocket League Replay Analysis with Musical Matching"
-            width={150}
-            height={40}
-          /> */}
-          Replay Rythms
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-[15px] font-semibold tracking-tight"
+        >
+          ReplayRhythms
         </Link>
+        <nav className="hidden items-center gap-6 text-sm sm:flex">
+          {NAV_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="text-muted-foreground transition-colors duration-instant hover:text-foreground"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
         <div className="flex items-center gap-2">
+          <MobileNav />
           {user ? (
             <UserDropdown
               session={user.email || user.user_metadata?.email || 'User'}
@@ -65,7 +72,6 @@ export const Navbar = async () => {
           )}
 
           <ThemeSwitcher />
-          <LanguageSwitcher />
         </div>
       </div>
     </header>

@@ -9,7 +9,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      'bg-card text-card-foreground rounded-lg border shadow-sm',
+      'rounded-lg border border-border/70 bg-card text-card-foreground',
       className
     )}
     {...props}
@@ -36,13 +36,30 @@ const CardTitle = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      'text-2xl font-semibold leading-none tracking-tight',
+      'text-base font-semibold leading-tight text-card-foreground',
       className
     )}
     {...props}
   />
 ));
 CardTitle.displayName = 'CardTitle';
+
+// A small uppercase label for cards that name a section of a dashboard rather
+// than title a page. Use CardTitle for headings people read as headings.
+const CardSectionLabel = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      'text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground',
+      className
+    )}
+    {...props}
+  />
+));
+CardSectionLabel.displayName = 'CardSectionLabel';
 
 const CardDescription = React.forwardRef<
   HTMLDivElement,
@@ -81,6 +98,7 @@ export {
   CardHeader,
   CardFooter,
   CardTitle,
+  CardSectionLabel,
   CardDescription,
   CardContent,
 };

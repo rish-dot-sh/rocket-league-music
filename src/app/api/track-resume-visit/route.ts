@@ -4,19 +4,10 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { cookies } from 'next/headers';
 import { createClient } from '@/utils/supabase/server';
+import { escapeHtml } from '@/utils/escapeHtml';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const NOTIFICATION_EMAIL = process.env.NOTIFICATION_EMAIL;
-
-function escapeHtml(str: string | undefined | null): string {
-  if (!str) return 'Not available';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
 
 export async function POST() {
   try {
@@ -48,7 +39,8 @@ export async function POST() {
       visitorData.email = session.user.email;
     }
 
-    await resend.emails.send({
+    // The SDK reports a rejected send in its return value, not by throwing.
+    const { error: sendError } = await resend.emails.send({
       from: 'onboarding@resend.dev',
       to: NOTIFICATION_EMAIL,
       subject:
@@ -63,6 +55,10 @@ export async function POST() {
         ${visitorData.loggedIn ? `<p><strong>User Email:</strong> ${escapeHtml(visitorData.email)}</p>` : '<p><strong>Login Status:</strong> Not logged in</p>'}
       `,
     });
+
+    if (sendError) {
+      console.error('Resume-visit notification failed to send:', sendError);
+    }
 
     // Clear the tracking cookie as we've now sent the notification
     (

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 
 import { Navbar } from '@/components/navbar/navbar'; // Adjust path as needed
 
@@ -30,10 +30,8 @@ mockEq.mockImplementation(() => ({
 }));
 
 // Mock child components
-jest.mock('@/components/navbar/language-switcher', () => ({
-  LanguageSwitcher: () => (
-    <div data-testid="language-switcher">LanguageSwitcher</div>
-  ),
+jest.mock('@/components/theme-switcher', () => ({
+  ThemeSwitcher: () => <div data-testid="theme-switcher">ThemeSwitcher</div>,
 }));
 jest.mock('@/components/navbar/sign-in-button', () => ({
   SignInButton: () => <div data-testid="sign-in-button">SignInButton</div>,
@@ -48,14 +46,14 @@ jest.mock('@/components/navbar/user-dropdown', () => ({
 }));
 
 // Mock i18n Link component
+// The narrow-screen menu pulls in lucide, which ships ESM.
+jest.mock('lucide-react', () => ({
+  Menu: () => <span data-testid="icon-menu" />,
+}));
+
 jest.mock('@/lib/i18n', () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Link: (props: any) => <a href={props.href}>{props.children}</a>,
-}));
-
-// Mock paraglide messages
-jest.mock('@/paraglide/messages', () => ({
-  app_name: () => 'Test App Name',
 }));
 
 describe('Navbar Component', () => {
@@ -64,7 +62,7 @@ describe('Navbar Component', () => {
     jest.clearAllMocks();
   });
 
-  it('renders Sign In button and Language Switcher when user is logged out', async () => {
+  it('renders the wordmark, navigation and Sign In button when user is logged out', async () => {
     // Arrange: Mock Supabase to return no user
     mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 
@@ -73,9 +71,19 @@ describe('Navbar Component', () => {
 
     // Assert
     await waitFor(() => {
-      expect(screen.getByText('Test App Name')).toBeInTheDocument();
+      expect(screen.getByText('ReplayRhythms')).toBeInTheDocument();
+      expect(
+        screen.getByRole('link', { name: 'Upload replay' })
+      ).toHaveAttribute('href', '/upload-replay');
+      expect(screen.getByRole('link', { name: 'My replays' })).toHaveAttribute(
+        'href',
+        '/replays'
+      );
+      expect(screen.getByRole('link', { name: 'Showcase' })).toHaveAttribute(
+        'href',
+        '/showcase'
+      );
       expect(screen.getByTestId('sign-in-button')).toBeInTheDocument();
-      expect(screen.getByTestId('language-switcher')).toBeInTheDocument();
       expect(screen.queryByTestId('user-dropdown')).not.toBeInTheDocument();
     });
 
@@ -84,7 +92,7 @@ describe('Navbar Component', () => {
     expect(mockFrom).not.toHaveBeenCalled(); // Should not check subscriptions if no user
   });
 
-  it('renders User Dropdown (non-pro) and Language Switcher when user is logged in without active subscription', async () => {
+  it('renders User Dropdown (non-pro) when user is logged in without active subscription', async () => {
     // Arrange: Mock Supabase to return a user and no active subscription
     const mockUser = {
       id: 'user-123',
@@ -103,12 +111,11 @@ describe('Navbar Component', () => {
 
     // Assert
     await waitFor(() => {
-      expect(screen.getByText('Test App Name')).toBeInTheDocument();
+      expect(screen.getByText('ReplayRhythms')).toBeInTheDocument();
       expect(screen.getByTestId('user-dropdown')).toBeInTheDocument();
       expect(screen.getByTestId('user-dropdown')).toHaveTextContent(
         'UserDropdown: test@example.com (Pro: false)'
       );
-      expect(screen.getByTestId('language-switcher')).toBeInTheDocument();
       expect(screen.queryByTestId('sign-in-button')).not.toBeInTheDocument();
     });
 
@@ -120,7 +127,7 @@ describe('Navbar Component', () => {
     expect(mockSingle).toHaveBeenCalledTimes(1);
   });
 
-  it('renders User Dropdown (pro) and Language Switcher when user is logged in with active subscription', async () => {
+  it('renders User Dropdown (pro) when user is logged in with active subscription', async () => {
     // Arrange: Mock Supabase to return a user and an active subscription
     const mockUser = {
       id: 'user-456',
@@ -139,12 +146,11 @@ describe('Navbar Component', () => {
 
     // Assert
     await waitFor(() => {
-      expect(screen.getByText('Test App Name')).toBeInTheDocument();
+      expect(screen.getByText('ReplayRhythms')).toBeInTheDocument();
       expect(screen.getByTestId('user-dropdown')).toBeInTheDocument();
       expect(screen.getByTestId('user-dropdown')).toHaveTextContent(
         'UserDropdown: pro@example.com (Pro: true)'
       );
-      expect(screen.getByTestId('language-switcher')).toBeInTheDocument();
       expect(screen.queryByTestId('sign-in-button')).not.toBeInTheDocument();
     });
 
@@ -154,5 +160,27 @@ describe('Navbar Component', () => {
     expect(mockSelect).toHaveBeenCalledWith('status, price_id');
     expect(mockEq).toHaveBeenCalledWith('user_id', 'user-456');
     expect(mockSingle).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the same routes behind the narrow-screen menu', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+
+    render(await Navbar());
+
+    // The menu button is what a phone gets in place of the link row.
+    const trigger = await screen.findByRole('button', { name: 'Menu' });
+    expect(trigger).toBeInTheDocument();
+
+    // The wide-screen row is still rendered, just hidden by CSS below sm.
+    const wideNav = screen.getByRole('navigation');
+    for (const [label, href] of [
+      ['Upload replay', '/upload-replay'],
+      ['My replays', '/replays'],
+      ['Showcase', '/showcase'],
+    ]) {
+      expect(
+        within(wideNav).getByRole('link', { name: label })
+      ).toHaveAttribute('href', href);
+    }
   });
 });

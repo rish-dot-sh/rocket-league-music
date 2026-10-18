@@ -5,30 +5,23 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import { ShareDialog } from '@/components/ShareDialog';
 import { useToast } from '@/components/ui/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  ArrowLeft,
-  Info,
-  AlertTriangle,
-  ChevronRight,
-  Loader2,
-  Share2,
-  Music,
-} from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
+import { ArrowLeft, AlertTriangle, ChevronRight, Loader2 } from 'lucide-react';
 import ReplayStats from '@/components/ReplayStats';
 import PlayerStats from '@/components/PlayerStats';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { motion } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import VisibilityToggle from '@/components/VisibilityToggle';
 import { Badge } from '@/components/ui/badge';
 import SongRecommendations from '@/components/SongRecommendations';
 import { useContextualFeedbackContext } from '@/contexts/ContextualFeedbackContext';
 import { ContextualPrompt } from '@/components/feedback/ContextualPrompt';
 import { ReplayData } from '@/types/replay';
+import { Song } from '@/types/spotify';
 
 export default function ReplayDetailsPage() {
   const { id } = useParams() as { id: string };
@@ -43,6 +36,9 @@ export default function ReplayDetailsPage() {
   const [isShowcase, setIsShowcase] = useState<boolean>(false);
   const [user, setUser] = useState<any>(null);
   const [isUserOwner, setIsUserOwner] = useState<boolean>(false);
+  const [topSong, setTopSong] = useState<(Song & { playerId: string }) | null>(
+    null
+  );
 
   // Contextual feedback hook
   const {
@@ -108,8 +104,8 @@ export default function ReplayDetailsPage() {
             // User doesn't have access to this replay
             toast({
               variant: 'destructive',
-              title: 'Access Denied',
-              description: 'You do not have permission to view this replay',
+              title: 'That replay is private',
+              description: 'Only the person who uploaded it can open it.',
             });
             router.push('/replays');
             return;
@@ -118,13 +114,12 @@ export default function ReplayDetailsPage() {
             // Replay exists
             toast({
               variant: 'default',
-              title: 'Replay already exists',
-              description: 'This replay file has already been uploaded',
+              title: 'You already uploaded this one',
+              description: 'Opening the version you have.',
             });
             router.push('/replays');
             return;
           }
-          console.log(`RESPONSE NOT OK ${JSON.stringify(response)}`);
           const errorData = await response.json();
           throw new Error(errorData.message || 'Failed to fetch replay data');
         }
@@ -154,8 +149,8 @@ export default function ReplayDetailsPage() {
           // Stop polling and show success toast if we just completed processing
           if (status === 'processing' && data.status === 'ready') {
             toast({
-              title: 'Processing Complete',
-              description: 'Replay statistics are ready to view',
+              title: 'Your match is ready',
+              description: 'Open the Songs tab to hear it.',
             });
           }
           // Stop polling
@@ -170,11 +165,9 @@ export default function ReplayDetailsPage() {
 
         toast({
           variant: 'destructive',
-          title: 'Error',
+          title: 'Could not load that replay',
           description:
-            error instanceof Error
-              ? error.message
-              : 'An unknown error occurred',
+            'Give it a moment and refresh. If it keeps failing, the replay may not have finished processing.',
         });
 
         return true; // Stop polling on error
@@ -225,7 +218,7 @@ export default function ReplayDetailsPage() {
           <CardContent className="pt-6 flex flex-col items-center text-center">
             <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
             <h1 className="text-2xl font-semibold mb-4">
-              Error Loading Replay
+              Could not load this replay
             </h1>
             <p className="text-destructive mb-6">
               {errorMessage || 'An unknown error occurred'}
@@ -247,20 +240,11 @@ export default function ReplayDetailsPage() {
     status === 'processing' ||
     status === 'pending'
   ) {
-    let message = '';
-    let progress = 0;
-
-    if (status === 'uploaded') {
-      message =
-        'Your replay has been uploaded and is waiting to be processed by ballchasing.com';
-      progress = 25;
-    } else if (status === 'processing') {
-      message = 'Your replay is being processed by ballchasing.com';
-      progress = 50;
-    } else if (status === 'pending') {
-      message = 'Extracting replay statistics...';
-      progress = 75;
-    }
+    const stages: [string, string][] = [
+      ['uploaded', 'Uploaded to ballchasing.com'],
+      ['processing', 'ballchasing.com is parsing the match'],
+      ['pending', 'Pulling the stats back'],
+    ];
 
     return (
       <div className="container mx-auto py-8 px-4">
@@ -269,6 +253,7 @@ export default function ReplayDetailsPage() {
           className="mb-8"
           onClick={() => router.push(isShowcase ? '/showcase' : '/replays')}
         >
+          <ArrowLeft className="mr-2 h-4 w-4" />
           {isShowcase ? 'Back to Showcase' : 'Back to Replays'}
         </Button>
 
@@ -276,28 +261,36 @@ export default function ReplayDetailsPage() {
           <CardContent className="pt-6">
             <div className="flex items-center mb-4">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              <h1 className="text-xl font-semibold">Processing Replay</h1>
+              <h1 className="text-xl font-semibold">Processing replay</h1>
             </div>
 
-            <Progress value={progress} className="mb-4" />
+            <ol className="mb-4 space-y-2 text-sm">
+              {stages.map(([stage, label]) => (
+                <li key={stage} className="flex items-center gap-2">
+                  <span className="flex h-3 w-3 shrink-0 items-center justify-center">
+                    {status === stage ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+                    )}
+                  </span>
+                  <span
+                    className={
+                      status === stage
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
+                    }
+                  >
+                    {label}
+                  </span>
+                </li>
+              ))}
+            </ol>
 
-            <p className="text-muted-foreground mb-4">{message}</p>
-
-            <div className="rounded-md bg-muted p-4 text-sm">
-              <div className="flex items-start">
-                <Info className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
-                <div>
-                  <p>
-                    This page will automatically update when processing is
-                    complete
-                  </p>
-                  <p className="mt-2 text-muted-foreground">
-                    Depending on the size of the replay file, this might take
-                    1-2 minutes
-                  </p>
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Most replays are done in under a minute. You can close this tab —
+              it keeps going without you.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -319,16 +312,16 @@ export default function ReplayDetailsPage() {
         <Card className="mx-auto max-w-md">
           <CardContent className="pt-6 flex flex-col items-center text-center">
             <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-            <h1 className="text-2xl font-semibold mb-4">
-              Replay Processing Failed
-            </h1>
+            <h1 className="text-2xl font-semibold mb-4">Processing failed</h1>
             <p className="text-muted-foreground mb-6">
-              Unfortunately, ballchasing.com was unable to process this replay
+              ballchasing.com could not read this replay file. That usually
+              means it is from an older game version or the recording was cut
+              short.
             </p>
             {errorMessage && (
               <p className="text-destructive mb-6">{errorMessage}</p>
             )}
-            <Button onClick={() => router.push('/upload')}>
+            <Button onClick={() => router.push('/upload-replay')}>
               Upload a different replay
             </Button>
           </CardContent>
@@ -339,8 +332,21 @@ export default function ReplayDetailsPage() {
 
   if (!replay) {
     return (
-      <div className="container mx-auto py-8 px-4 text-center">
-        <p>Replay not found</p>
+      <div className="container mx-auto py-8 px-4">
+        <Card className="mx-auto max-w-md">
+          <CardContent className="pt-6 flex flex-col items-center text-center">
+            <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+            <h1 className="text-2xl font-semibold mb-4">
+              That replay does not exist
+            </h1>
+            <p className="text-muted-foreground mb-6">
+              It may have been deleted, or the link is wrong.
+            </p>
+            <Button onClick={() => router.push('/replays')}>
+              Back to your replays
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -355,12 +361,7 @@ export default function ReplayDetailsPage() {
   }
 
   return (
-    <motion.div
-      className="container mx-auto py-8 px-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-    >
+    <div className="container mx-auto py-8 px-4">
       <div className="mb-8">
         <Button
           variant="ghost"
@@ -378,8 +379,11 @@ export default function ReplayDetailsPage() {
           </h1>
 
           {replay.visibility === 'public' && (
-            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
-              Public Showcase
+            <Badge
+              variant="outline"
+              className="border-transparent bg-primary/10 text-primary ring-1 ring-inset ring-primary/25"
+            >
+              Public
             </Badge>
           )}
         </div>
@@ -399,24 +403,14 @@ export default function ReplayDetailsPage() {
             </Button>
           )}
 
-          {/* Share button for showcase replays */}
+          {/* Share sheet, offered once the match is public */}
           {replay.visibility === 'public' && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-1"
-              onClick={() => {
-                const url = window.location.href;
-                navigator.clipboard.writeText(url);
-                toast({
-                  title: 'Link copied!',
-                  description: 'Share this replay with your friends',
-                });
-              }}
-            >
-              <Share2 className="h-4 w-4 mr-1" />
-              Share
-            </Button>
+            <ShareDialog
+              url={typeof window === 'undefined' ? '' : window.location.href}
+              metrics={replay.metrics}
+              topSong={topSong}
+              isOwner={isUserOwner}
+            />
           )}
           {!isShowcase && isUserOwner && (
             <div className="ml-auto">
@@ -443,9 +437,8 @@ export default function ReplayDetailsPage() {
                 variant="default"
                 size="sm"
                 onClick={() => router.push('/login')}
-                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
               >
-                Sign up to upload your replays
+                Analyze your own replay
               </Button>
             </div>
           )}
@@ -459,16 +452,10 @@ export default function ReplayDetailsPage() {
       >
         <TabsList className="mb-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="players">Player Stats</TabsTrigger>
-          <TabsTrigger value="boost">Boost Analysis</TabsTrigger>
+          <TabsTrigger value="players">Players</TabsTrigger>
+          <TabsTrigger value="boost">Boost</TabsTrigger>
           <TabsTrigger value="positioning">Positioning</TabsTrigger>
-          <TabsTrigger
-            value="recommendations"
-            className="flex items-center gap-2"
-          >
-            <Music className="h-4 w-4" />
-            Song Recommendations
-          </TabsTrigger>
+          <TabsTrigger value="recommendations">Songs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -491,25 +478,30 @@ export default function ReplayDetailsPage() {
             replayData={replay}
             onMusicRecommendationsViewed={triggerMusicRecommendationsViewed}
             onSpotifyIntegrationUsed={triggerSpotifyIntegrationUsed}
+            onSongsLoaded={(songs, playerId) =>
+              setTopSong(songs[0] ? { ...songs[0], playerId } : null)
+            }
           />
         </TabsContent>
       </Tabs>
 
       {/* Contextual Feedback Prompt */}
-      {activePrompt && (
-        <ContextualPrompt
-          context={activePrompt.context}
-          message={activePrompt.message}
-          onDismiss={dismissPrompt}
-          onOpenFullFeedback={() => {
-            // Trigger the global FeedbackWidget to open with the contextual context
-            if (activePrompt) {
-              triggerFullFeedback(activePrompt.context);
-            }
-            completePrompt();
-          }}
-        />
-      )}
-    </motion.div>
+      <AnimatePresence>
+        {activePrompt && (
+          <ContextualPrompt
+            context={activePrompt.context}
+            message={activePrompt.message}
+            onDismiss={dismissPrompt}
+            onOpenFullFeedback={() => {
+              // Trigger the global FeedbackWidget to open with the contextual context
+              if (activePrompt) {
+                triggerFullFeedback(activePrompt.context);
+              }
+              completePrompt();
+            }}
+          />
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
